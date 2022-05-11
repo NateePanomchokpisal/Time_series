@@ -1,0 +1,182 @@
+---
+title: "Disease_of_pulmonary_TB_and_Pneumonia"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+# set path
+setwd("C:/Users/DELL/Dropbox/My PC (DESKTOP-6M0063Q)/Desktop/Stat_CU/Time Series/Project")
+library("readxl")
+data<- read_excel("Predict Pulmonary_tb(P'Pang).xlsx",sheet = "Time_series_data")
+```
+
+# plot Time Series Pneumonia
+```{r}
+ts_pneu <- ts(data$`Sum of Pneumonia`,start = c(2009,1),frequency = 12)
+plot(ts_pneu)
+
+```
+Split data training and testing (test on 2 year)
+```{r}
+train_pneu <- ts(ts_pneu[c(1:108)],start = c(2009,1),frequency = 12)
+test_pneu <- ts(ts_pneu[c(109:132)],start = c(2018,1),frequency = 12)
+plot(train_pneu,xlim = c(2014,2020))
+lines(test_pneu,col="red",lty=2)
+```
+
+# This data has Trending
+differincing 1 step
+```{r}
+diff_train_pneu <- diff(train_pneu)
+plot(diff_train_pneu)
+```
+# Augmented dickey fuller test
+
+```{r}
+library(tseries)
+adf.test(diff_train_pneu,alternative = "stationary")
+```
+P-value<0.05 ,rej H0
+that is the data  is stationary
+
+# plot acf and pacf
+```{r}
+acf(as.vector(diff_train_pneu),lag.max = 60)
+pacf(as.vector(diff_train_pneu),lag.max = 60)
+```
+(model 1) 
+Seasonal effect 12 month = MA(1)
+Non Seasonal effect = MA(2)
+SMA(1)^12 , MA(2)
+
+(model 2)
+Seasonal effect 12 month = MA(1)
+Non Seasonal effect = AR(2)
+SMA(1)^12 , AR(2)
+
+```{r}
+model1 <- arima(diff_train_pneu,order=c(0,0,2),seasonal = list(order=c(0,0,1),period = 12))
+model1
+```
+Check assumption
+```{r}
+library(TSA)
+par(mfrow=c(1,2))
+hist(rstandard(model1),xlab="Standardised residuals",main="")
+qqnorm(rstandard(model1))
+qqline(rstandard(model1))
+tsdiag(model1,gof=30,omit.initial=T)
+```
+
+```{r}
+model2 <- arima(diff_train_pneu,order=c(2,0,0),seasonal = list(order=c(0,0,1),period = 12))
+model2
+```
+Check assumption
+```{r}
+library(TSA)
+par(mfrow=c(1,2))
+hist(rstandard(model2),xlab="Standardised residuals",main="")
+qqnorm(rstandard(model2))
+qqline(rstandard(model2))
+tsdiag(model2,gof=30,omit.initial=T)
+```
+By diagnostic testing 
+use MODEL1 -> SMA(1)^12 x MA(2) -> aic = 1619.62
+```{r}
+predict_diff_pneu <- predict(model1,23,prediction.interval = TRUE, level=0.95)
+predict_pneu <- ts(train_pneu[108]+cumsum(predict_diff_pneu$pred),start=c(2018,1),frequency=12)
+plot(test_pneu)
+lines(predict_pneu,lty = 2,col ="red")
+```
+# try VAR model
+
+```{r}
+dis_dat <- data[c(2,3)]
+# Change columns name
+names(dis_dat) = c("Pneunomia","Pulmonary_TB")
+# Time series dataframe
+ts_data <- ts(dis_dat,start = c(2009,1),frequency = 12)
+plot(ts_data)
+```
+
+### tseries - standard test adt.test ###
+```{r}
+library(tseries)
+apply(ts_data, 2, adf.test)
+```
+both factors are Non stationary 
+### diff 1 time
+```{r}
+diff_ts <- diff(ts_data)
+apply(diff_ts, 2, adf.test)
+```
+both factors are Stationary 
+
+### VAR
+```{r}
+plot.ts(diff_ts)
+```
+### Lag order identification ###
+```{r}
+library(vars)
+VARselect(diff_ts, type = "none", lag.max = 10)
+```
+### Creating a VAR model with vars, VAR(2) and VAR(5) ###
+VAR(2)
+
+```{r}
+var.model1 <- VAR(diff_ts, p=2, type="none")
+summary(var.model1)
+```
+### Creating a VAR model with vars, VAR(2) and VAR(5) ###
+VAR(5)
+
+```{r}
+var.model2 <- VAR(diff_ts, p=5, type="none")
+summary(var.model2)
+```
+### Residual diagnostics ### Portmanteau test
+
+```{r}
+serial.test(var.model2)
+```
+reject H0 -> not independent
+
+### Granger test for causality ###
+
+```{r}
+causality(var.model2, cause = c("Pneunomia"))
+causality(var.model2, cause = c("Pulmonary_TB"))
+
+#selecting variable have influence
+#choose FTR
+```
+### 7. Forecasting VAR models
+
+```{r}
+fcast = predict(var.model2, n.ahead = 24)
+plot(fcast)
+```
+
+
+```{r}
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
